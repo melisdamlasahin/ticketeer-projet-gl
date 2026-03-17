@@ -15,7 +15,6 @@ public class TestControleur {
          return "Chaine de caractere transmise par tickect";
      }
 }
-*/
 
 
 // un des test pour voir si mon spring boot fonctionne
@@ -33,5 +32,17 @@ public class TestControleur {
         return "Projet démarré sans base";
     }
 }
+*/
 
+package ticketeer.ticketeer;
 
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class TicketeerApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(TicketeerApplication.class, args);
+    }
+}
