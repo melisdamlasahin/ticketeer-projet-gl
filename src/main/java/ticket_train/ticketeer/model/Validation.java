@@ -3,7 +3,7 @@ package ticket_train.ticketeer.model;
 import ticket_train.ticketeer.model.enums.ValidationMotif;
 import ticket_train.ticketeer.model.enums.ValidationResult;
 import jakarta.persistence.*;
-        import java.time.LocalDateTime;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -24,34 +24,37 @@ public class Validation {
     @Column(nullable = false)
     private ValidationMotif motif;
 
+    @Column(nullable = false)
+    private String codeOptique;
+
+    @Column
+    private UUID serviceId;
+
     @ManyToOne
     @JoinColumn(name = "controleur_id", nullable = false)
     private Controleur controleur;
 
     @ManyToOne
-    @JoinColumn(name = "segment_id", nullable = false)
+    @JoinColumn(name = "segment_id")
     private SegmentBillet segment;
-
-    @Column
-    private Integer checkpointOrder;
 
     public Validation() {}
 
-    public Validation(ValidationResult resultat, ValidationMotif motif, Controleur controleur, SegmentBillet segment) {
-        this(resultat, motif, controleur, segment, null);
-    }
-
-    public Validation(ValidationResult resultat,
-                      ValidationMotif motif,
-                      Controleur controleur,
-                      SegmentBillet segment,
-                      Integer checkpointOrder) {
+    public Validation(
+            ValidationResult resultat,
+            ValidationMotif motif,
+            String codeOptique,
+            UUID serviceId,
+            Controleur controleur,
+            SegmentBillet segment
+    ) {
         this.timestampControle = LocalDateTime.now();
         this.resultat = resultat;
         this.motif = motif;
+        this.codeOptique = codeOptique;
+        this.serviceId = serviceId;
         this.controleur = controleur;
         this.segment = segment;
-        this.checkpointOrder = checkpointOrder;
     }
 
     // Getters et Setters
@@ -63,10 +66,12 @@ public class Validation {
     public void setResultat(ValidationResult resultat) { this.resultat = resultat; }
     public ValidationMotif getMotif() { return motif; }
     public void setMotif(ValidationMotif motif) { this.motif = motif; }
+    public String getCodeOptique() { return codeOptique; }
+    public void setCodeOptique(String codeOptique) { this.codeOptique = codeOptique; }
+    public UUID getServiceId() { return serviceId; }
+    public void setServiceId(UUID serviceId) { this.serviceId = serviceId; }
     public Controleur getControleur() { return controleur; }
     public void setControleur(Controleur controleur) { this.controleur = controleur; }
     public SegmentBillet getSegment() { return segment; }
     public void setSegment(SegmentBillet segment) { this.segment = segment; }
-    public Integer getCheckpointOrder() { return checkpointOrder; }
-    public void setCheckpointOrder(Integer checkpointOrder) { this.checkpointOrder = checkpointOrder; }
 }
