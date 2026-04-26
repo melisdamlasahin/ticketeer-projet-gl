@@ -1,10 +1,17 @@
 package ticket_train.ticketeer.dto.mobile;
 
+import jakarta.validation.constraints.Pattern;
+
 public class UpdateProfileRequest {
     private String nom;
     private String prenom;
     private String sexe;
     private String dateNaissance;
+
+    @Pattern(
+            regexp = "^$|^[0-9+() .-]{6,20}$",
+            message = "Le numero de telephone doit etre valide"
+    )
     private String telephone;
 
     public String getNom() {

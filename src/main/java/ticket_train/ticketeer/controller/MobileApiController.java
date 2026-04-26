@@ -1,5 +1,6 @@
 package ticket_train.ticketeer.controller;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -41,12 +42,12 @@ public class MobileApiController {
     }
 
     @PostMapping("/auth/login")
-    public AuthResponse login(@RequestBody LoginRequest request) {
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return mobileApiService.login(request);
     }
 
     @PostMapping("/auth/register")
-    public AuthResponse register(@RequestBody RegisterRequest request) {
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
         return mobileApiService.register(request);
     }
 
@@ -59,19 +60,19 @@ public class MobileApiController {
     @PutMapping("/clients/{clientId}/profile")
     public ClientProfileResponse updateProfile(@RequestHeader("X-Auth-Token") String authToken,
                                                @PathVariable String clientId,
-                                               @RequestBody UpdateProfileRequest request) {
+                                               @Valid @RequestBody UpdateProfileRequest request) {
         return mobileApiService.updateProfile(authToken, clientId, request);
     }
 
     @PostMapping("/achat/tarif")
     public TarificationResponse calculerTarif(@RequestHeader("X-Auth-Token") String authToken,
-                                              @RequestBody AchatBilletRequest request) {
+                                              @Valid @RequestBody AchatBilletRequest request) {
         return mobileApiService.calculerTarif(authToken, request);
     }
 
     @PostMapping("/achat/confirmer")
     public AchatBilletResponse confirmerAchat(@RequestHeader("X-Auth-Token") String authToken,
-                                              @RequestBody AchatBilletRequest request) {
+                                              @Valid @RequestBody AchatBilletRequest request) {
         return mobileApiService.confirmerAchat(authToken, request);
     }
 
@@ -106,7 +107,7 @@ public class MobileApiController {
     @PutMapping("/billets/{id}")
     public TicketResponse updateBillet(@RequestHeader("X-Auth-Token") String authToken,
                                        @PathVariable("id") String billetId,
-                                       @RequestBody AchatBilletRequest request) {
+                                       @Valid @RequestBody AchatBilletRequest request) {
         return mobileApiService.updateBillet(authToken, billetId, request);
     }
 }

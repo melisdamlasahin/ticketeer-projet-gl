@@ -1,14 +1,28 @@
 package ticket_train.ticketeer.dto.mobile;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+
 public class AchatBilletRequest {
+    @NotBlank(message = "Le service aller est obligatoire")
     private String serviceId;
     private String returnServiceId;
     private String profilTarifaire;
+
+    @NotBlank(message = "Le client est obligatoire")
     private String clientId;
     private String classeReservation;
     private String preferencePlace;
     private String nomPassager;
+
+    @Email(message = "L'email passager doit etre valide")
     private String emailPassager;
+
+    @Pattern(
+            regexp = "^$|^[0-9+() .-]{6,20}$",
+            message = "Le telephone passager doit etre valide"
+    )
     private String telephonePassager;
     private String methodePaiement;
 
