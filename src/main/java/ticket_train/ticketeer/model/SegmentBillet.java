@@ -28,6 +28,12 @@ public class SegmentBillet {
     @JoinColumn(name = "service_id", nullable = false)
     private ServiceFerroviaire service;
 
+    @Column(nullable = false)
+    private Integer ordreDepartValide = 1;
+
+    @Column(nullable = false)
+    private Integer ordreArriveeValide = 2;
+
     public SegmentBillet() {}
 
     public SegmentBillet(Integer ordre, ServiceFerroviaire service) {
@@ -46,4 +52,8 @@ public class SegmentBillet {
     public void setBillet(Billet billet) { this.billet = billet; }
     public ServiceFerroviaire getService() { return service; }
     public void setService(ServiceFerroviaire service) { this.service = service; }
+    public Integer getOrdreDepartValide() { return ordreDepartValide; }
+    public void setOrdreDepartValide(Integer ordreDepartValide) { this.ordreDepartValide = ordreDepartValide; }
+    public Integer getOrdreArriveeValide() { return ordreArriveeValide; }
+    public void setOrdreArriveeValide(Integer ordreArriveeValide) { this.ordreArriveeValide = ordreArriveeValide; }
 }
