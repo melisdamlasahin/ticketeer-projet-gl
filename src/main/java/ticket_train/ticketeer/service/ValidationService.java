@@ -1,5 +1,6 @@
 package ticket_train.ticketeer.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.NoTransactionException;
 import ticket_train.ticketeer.dto.ValidationRequest;
@@ -24,6 +25,7 @@ public class ValidationService {
     private final FraudDetectionService fraudDetectionService;
     private final ValidationTraceService validationTraceService;
 
+    @Autowired
     public ValidationService(BilletRepository billetRepository,
                              SegmentBilletRepository segmentBilletRepository,
                              ServiceCheckpointRepository serviceCheckpointRepository,
