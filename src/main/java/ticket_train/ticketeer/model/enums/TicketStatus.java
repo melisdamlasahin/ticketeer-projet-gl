@@ -4,6 +4,7 @@ public enum TicketStatus {
     CREE,
     GENERE,
     DISPONIBLE,
+    ANNULE,
     EN_UTILISATION,
     TERMINE
 }

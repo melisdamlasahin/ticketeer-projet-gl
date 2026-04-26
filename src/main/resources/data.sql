@@ -14,10 +14,10 @@ INSERT IGNORE INTO trains (train_id, nom_train) VALUES
                                              ('TER400', 'TER Lille-Paris');
 
 -- Insertion des services (pour le 18/03/2026)
-INSERT IGNORE INTO services_ferroviaires (service_id, date_trajet, train_id, ville_depart_id, ville_arrivee_id, prix_base) VALUES
-                                                                                                                        (UUID_TO_BIN('a1111111-1111-1111-1111-111111111111'), '2026-03-18', 'TGV100', UUID_TO_BIN('11111111-1111-1111-1111-111111111111'), UUID_TO_BIN('22222222-2222-2222-2222-222222222222'), 89.90),
-                                                                                                                        (UUID_TO_BIN('a2222222-2222-2222-2222-222222222222'), '2026-03-20', 'TGV200', UUID_TO_BIN('22222222-2222-2222-2222-222222222222'), UUID_TO_BIN('33333333-3333-3333-3333-333333333333'), 75.50),
-                                                                                                                        (UUID_TO_BIN('a3333333-3333-3333-3333-333333333333'), '2026-03-25', 'INTER300', UUID_TO_BIN('44444444-4444-4444-4444-444444444444'), UUID_TO_BIN('11111111-1111-1111-1111-111111111111'), 95.00);
+INSERT IGNORE INTO services_ferroviaires (service_id, date_trajet, heure_depart, train_id, ville_depart_id, ville_arrivee_id, prix_base, voie, retard_minutes) VALUES
+                                                                                                                                        (UUID_TO_BIN('a1111111-1111-1111-1111-111111111111'), '2026-03-18', '08:12:00', 'TGV100', UUID_TO_BIN('11111111-1111-1111-1111-111111111111'), UUID_TO_BIN('22222222-2222-2222-2222-222222222222'), 89.90, '12', 5),
+                                                                                                                                        (UUID_TO_BIN('a2222222-2222-2222-2222-222222222222'), '2026-03-20', '14:40:00', 'TGV200', UUID_TO_BIN('22222222-2222-2222-2222-222222222222'), UUID_TO_BIN('33333333-3333-3333-3333-333333333333'), 75.50, '4', 0),
+                                                                                                                                        (UUID_TO_BIN('a3333333-3333-3333-3333-333333333333'), '2026-03-25', '09:25:00', 'INTER300', UUID_TO_BIN('44444444-4444-4444-4444-444444444444'), UUID_TO_BIN('11111111-1111-1111-1111-111111111111'), 95.00, 'B', 12);
 
 -- Insertion des clients de test
 INSERT IGNORE INTO clients (client_id, nom, prenom, photo_ref) VALUES
