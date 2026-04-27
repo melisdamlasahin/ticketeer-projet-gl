@@ -77,8 +77,8 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void ensureClients() {
-        ensureClient("Jean", "Dupont", "jean.dupont@easyrail.test", "password123");
-        ensureClient("Marie", "Martin", "marie.martin@easyrail.test", "password123");
+        ensureClient("Jean", "Dupont", "jean.dupont@ticketeer.test", "password123");
+        ensureClient("Marie", "Martin", "marie.martin@ticketeer.test", "password123");
     }
 
     private void ensureServices() {
@@ -269,7 +269,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void ensureSampleTicket() {
-        Client client = clientRepository.findByEmail("jean.dupont@easyrail.test").orElse(null);
+        Client client = clientRepository.findByEmail("jean.dupont@ticketeer.test").orElse(null);
         if (client == null || billetRepository.existsByCodeOptique("EASY-DEMO-001")) {
             return;
         }
