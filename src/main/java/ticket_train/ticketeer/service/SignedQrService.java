@@ -26,7 +26,8 @@ public class SignedQrService {
         MALFORMED
     }
 
-    private static final String PREFIX = "EASYRAILQR";
+    private static final String PREFIX = "TICKETEERQR";
+    private static final String LEGACY_PREFIX = "EASYRAILQR";
     private static final Pattern JSON_FIELD_PATTERN = Pattern.compile("\"([^\"]+)\":\"?([^\",}]*)\"?");
 
     private final String qrSigningSecret;
@@ -54,7 +55,12 @@ public class SignedQrService {
     }
 
     public ParseResult parseAndVerify(String rawValue) {
-        if (rawValue == null || rawValue.isBlank() || !rawValue.startsWith(PREFIX + ".")) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return new ParseResult(ParseStatus.NOT_SIGNED, null);
+        }
+
+        String matchedPrefix = extractSupportedPrefix(rawValue);
+        if (matchedPrefix == null) {
             return new ParseResult(ParseStatus.NOT_SIGNED, null);
         }
 
@@ -76,6 +82,16 @@ public class SignedQrService {
         } catch (Exception ex) {
             return new ParseResult(ParseStatus.MALFORMED, null);
         }
+    }
+
+    private String extractSupportedPrefix(String rawValue) {
+        if (rawValue.startsWith(PREFIX + ".")) {
+            return PREFIX;
+        }
+        if (rawValue.startsWith(LEGACY_PREFIX + ".")) {
+            return LEGACY_PREFIX;
+        }
+        return null;
     }
 
     private SignedQrPayload parsePayload(String json) {
