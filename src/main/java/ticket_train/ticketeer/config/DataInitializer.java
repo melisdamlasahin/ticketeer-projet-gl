@@ -270,7 +270,9 @@ public class DataInitializer implements CommandLineRunner {
 
     private void ensureSampleTicket() {
         Client client = clientRepository.findByEmail("jean.dupont@ticketeer.test").orElse(null);
-        if (client == null || billetRepository.existsByCodeOptique("EASY-DEMO-001")) {
+        if (client == null
+                || billetRepository.existsByCodeOptique("TICK-DEMO-001")
+                || billetRepository.existsByCodeOptique("EASY-DEMO-001")) {
             return;
         }
 
@@ -279,7 +281,7 @@ public class DataInitializer implements CommandLineRunner {
             return;
         }
 
-        Billet billet = new Billet("EASY-DEMO-001", BigDecimal.valueOf(service.getPrixBase()), client);
+        Billet billet = new Billet("TICK-DEMO-001", BigDecimal.valueOf(service.getPrixBase()), client);
         billet.setEtat(TicketStatus.DISPONIBLE);
         billetRepository.save(billet);
 

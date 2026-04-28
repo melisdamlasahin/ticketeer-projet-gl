@@ -27,7 +27,11 @@ import ticket_train.ticketeer.repository.ServiceFerroviaireRepository;
 import ticket_train.ticketeer.repository.ValidationRepository;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +62,8 @@ class ValidationServiceTest {
     private FraudDetectionService fraudDetectionService;
     @Mock
     private ValidationTraceService validationTraceService;
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     private ValidationService validationService;
     private Controleur controleur;
@@ -65,6 +71,10 @@ class ValidationServiceTest {
 
     @BeforeEach
     void setUp() {
+        Clock fixedClock = Clock.fixed(
+                LocalDateTime.of(2026, 3, 18, 9, 0).toInstant(ZoneOffset.UTC),
+                ZoneOffset.UTC
+        );
         validationService = new ValidationService(
                 billetRepository,
                 segmentBilletRepository,
@@ -73,7 +83,9 @@ class ValidationServiceTest {
                 serviceFerroviaireRepository,
                 signedQrService,
                 fraudDetectionService,
-                validationTraceService
+                validationTraceService,
+                securityAuditService,
+                fixedClock
         );
         controleur = new Controleur("ctrl", "hash", "Nom", "Prenom");
         serviceId = UUID.randomUUID();
@@ -96,12 +108,12 @@ class ValidationServiceTest {
         Billet billet = buildBilletWithSegment(SegmentStatus.VALIDE, serviceId, 1, 2);
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
         when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any())).thenReturn(ValidationMotif.DEJA_VALIDE);
+        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(ValidationMotif.DEJA_VALIDE);
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId), controleur);
 
         assertEquals(ValidationMotif.DEJA_VALIDE, response.getMotif());
-        verify(validationTraceService).saveTrace(any(), any(), any(), any());
+        verify(validationTraceService).saveTrace(any(), any(), any(), any(), any());
         verify(segmentBilletRepository, never()).save(any());
     }
 
@@ -156,7 +168,7 @@ class ValidationServiceTest {
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Paris", 1)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
         when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any())).thenReturn(null);
+        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
@@ -164,7 +176,7 @@ class ValidationServiceTest {
         assertEquals(ValidationMotif.OK, response.getMotif());
         assertEquals(SegmentStatus.VALIDE, billet.getSegments().get(0).getEtatSegment());
         assertEquals(TicketStatus.EN_UTILISATION, billet.getEtat());
-        verify(validationTraceService).saveTrace(any(), any(), any(), any());
+        verify(validationTraceService).saveTrace(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -175,7 +187,7 @@ class ValidationServiceTest {
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Marseille", 3)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
         when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any())).thenReturn(null);
+        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
@@ -192,13 +204,79 @@ class ValidationServiceTest {
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Lyon", 2)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
         when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any())).thenReturn(null);
+        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationResult.VALID, response.getResultat());
         assertEquals(SegmentStatus.TERMINE, billet.getSegments().get(0).getEtatSegment());
         assertEquals(TicketStatus.TERMINE, billet.getEtat());
+    }
+
+    @Test
+    void rejectsValidationBeforeServiceDepartureWindow() {
+        Clock earlyClock = Clock.fixed(
+                LocalDateTime.of(2026, 3, 18, 7, 30).toInstant(ZoneOffset.UTC),
+                ZoneOffset.UTC
+        );
+        validationService = new ValidationService(
+                billetRepository,
+                segmentBilletRepository,
+                serviceCheckpointRepository,
+                validationRepository,
+                serviceFerroviaireRepository,
+                signedQrService,
+                fraudDetectionService,
+                validationTraceService,
+                securityAuditService,
+                earlyClock
+        );
+        Billet billet = buildBilletWithSegment(SegmentStatus.PREVU, serviceId, 1, 3);
+        UUID checkpointId = UUID.randomUUID();
+        when(serviceCheckpointRepository.findById(checkpointId))
+                .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Lyon", 2)));
+        when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
+        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
+        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
+
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
+
+        assertEquals(ValidationResult.INVALID, response.getResultat());
+        assertEquals(ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT, response.getMotif());
+        assertEquals(SegmentStatus.INVALIDE, billet.getSegments().get(0).getEtatSegment());
+    }
+
+    @Test
+    void rejectsValidationLongAfterJourneyEnded() {
+        Clock lateClock = Clock.fixed(
+                LocalDateTime.of(2026, 3, 20, 12, 0).toInstant(ZoneOffset.UTC),
+                ZoneOffset.UTC
+        );
+        validationService = new ValidationService(
+                billetRepository,
+                segmentBilletRepository,
+                serviceCheckpointRepository,
+                validationRepository,
+                serviceFerroviaireRepository,
+                signedQrService,
+                fraudDetectionService,
+                validationTraceService,
+                securityAuditService,
+                lateClock
+        );
+        Billet billet = buildBilletWithSegment(SegmentStatus.PREVU, serviceId, 1, 2);
+        UUID checkpointId = UUID.randomUUID();
+        when(serviceCheckpointRepository.findById(checkpointId))
+                .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Lyon", 2)));
+        when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
+        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
+        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
+
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
+
+        assertEquals(ValidationResult.INVALID, response.getResultat());
+        assertEquals(ValidationMotif.TRAJET_TERMINE, response.getMotif());
+        assertEquals(SegmentStatus.INVALIDE, billet.getSegments().get(0).getEtatSegment());
     }
 
     private Billet buildBilletWithSegment(SegmentStatus status, UUID currentServiceId, int startOrder, int endOrder) {
@@ -208,7 +286,7 @@ class ValidationServiceTest {
         Train train = new Train("T1", "TGV Test");
         Ville depart = new Ville("Paris");
         Ville arrivee = new Ville("Lyon");
-        ServiceFerroviaire service = new ServiceFerroviaire(LocalDate.of(2026, 3, 18), train, depart, arrivee, 50.0);
+        ServiceFerroviaire service = new ServiceFerroviaire(LocalDate.of(2026, 3, 18), LocalTime.of(8, 0), train, depart, arrivee, 50.0);
         service.setServiceId(currentServiceId);
 
         Billet billet = new Billet("CODE", BigDecimal.TEN, client);

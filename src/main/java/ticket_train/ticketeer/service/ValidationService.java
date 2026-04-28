@@ -12,11 +12,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class ValidationService {
+    private static final int EARLY_VALIDATION_GRACE_MINUTES = 15;
+    private static final int MIN_MINUTES_PER_CHECKPOINT_HOP = 10;
+    private static final int FINAL_CHECKPOINT_GRACE_MINUTES = 180;
+    private static final int MAX_SERVICE_AGE_DAYS = 1;
 
     private final BilletRepository billetRepository;
     private final SegmentBilletRepository segmentBilletRepository;
@@ -24,6 +32,8 @@ public class ValidationService {
     private final SignedQrService signedQrService;
     private final FraudDetectionService fraudDetectionService;
     private final ValidationTraceService validationTraceService;
+    private final SecurityAuditService securityAuditService;
+    private final Clock clock;
 
     @Autowired
     public ValidationService(BilletRepository billetRepository,
@@ -33,13 +43,40 @@ public class ValidationService {
                              ServiceFerroviaireRepository serviceFerroviaireRepository,
                              SignedQrService signedQrService,
                              FraudDetectionService fraudDetectionService,
-                             ValidationTraceService validationTraceService) {
+                             ValidationTraceService validationTraceService,
+                             SecurityAuditService securityAuditService) {
+        this(
+                billetRepository,
+                segmentBilletRepository,
+                serviceCheckpointRepository,
+                validationRepository,
+                serviceFerroviaireRepository,
+                signedQrService,
+                fraudDetectionService,
+                validationTraceService,
+                securityAuditService,
+                Clock.systemDefaultZone()
+        );
+    }
+
+    ValidationService(BilletRepository billetRepository,
+                      SegmentBilletRepository segmentBilletRepository,
+                      ServiceCheckpointRepository serviceCheckpointRepository,
+                      ValidationRepository validationRepository,
+                      ServiceFerroviaireRepository serviceFerroviaireRepository,
+                      SignedQrService signedQrService,
+                      FraudDetectionService fraudDetectionService,
+                      ValidationTraceService validationTraceService,
+                      SecurityAuditService securityAuditService,
+                      Clock clock) {
         this.billetRepository = billetRepository;
         this.segmentBilletRepository = segmentBilletRepository;
         this.serviceCheckpointRepository = serviceCheckpointRepository;
         this.signedQrService = signedQrService;
         this.fraudDetectionService = fraudDetectionService;
         this.validationTraceService = validationTraceService;
+        this.securityAuditService = securityAuditService;
+        this.clock = clock;
     }
 
     public ValidationService(BilletRepository billetRepository,
@@ -48,7 +85,8 @@ public class ValidationService {
                              ServiceFerroviaireRepository serviceFerroviaireRepository,
                              SignedQrService signedQrService,
                              FraudDetectionService fraudDetectionService,
-                             ValidationTraceService validationTraceService) {
+                             ValidationTraceService validationTraceService,
+                             SecurityAuditService securityAuditService) {
         this(
                 billetRepository,
                 segmentBilletRepository,
@@ -57,8 +95,10 @@ public class ValidationService {
                 serviceFerroviaireRepository,
                 signedQrService,
                 fraudDetectionService,
-                validationTraceService
-        );
+                validationTraceService,
+                securityAuditService,
+                Clock.systemDefaultZone()
+            );
     }
 
     @Transactional
@@ -110,25 +150,27 @@ public class ValidationService {
                 return resp;
             }
 
-            ValidationMotif fraudMotif = fraudDetectionService.detectValidationIssue(segmentTrouve);
+            ValidationMotif fraudMotif = fraudDetectionService.detectValidationIssue(segmentTrouve, controleur, currentCheckpoint);
             if (fraudMotif != null) {
+                securityAuditService.logFraudDetection(fraudMotif, controleur, segmentTrouve, currentCheckpoint);
                 ValidationResponse resp = buildResponse(ValidationResult.INVALID, fraudMotif);
                 enrichWithClientInfo(resp, client, billet);
                 enrichWithJourneyContext(resp, segmentTrouve, currentCheckpoint);
                 if (segmentTrouve != null) {
-                    validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.INVALID, fraudMotif);
+                    validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.INVALID, fraudMotif, currentCheckpoint);
                 }
                 return resp;
             }
 
             ValidationMotif journeyWindowIssue = detectJourneyWindowIssue(segmentTrouve, currentCheckpoint);
             if (journeyWindowIssue != null) {
+                securityAuditService.logJourneyWindowViolation(journeyWindowIssue, segmentTrouve, currentCheckpoint);
                 segmentTrouve.setEtatSegment(SegmentStatus.INVALIDE);
                 segmentBilletRepository.save(segmentTrouve);
                 ValidationResponse resp = buildResponse(ValidationResult.INVALID, journeyWindowIssue);
                 enrichWithClientInfo(resp, client, billet);
                 enrichWithJourneyContext(resp, segmentTrouve, currentCheckpoint);
-                validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.INVALID, journeyWindowIssue);
+                validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.INVALID, journeyWindowIssue, currentCheckpoint);
                 return resp;
             }
 
@@ -138,7 +180,7 @@ public class ValidationService {
             updateBilletStatus(billet);
             billetRepository.save(billet);
 
-            validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.VALID, ValidationMotif.OK);
+            validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.VALID, ValidationMotif.OK, currentCheckpoint);
 
             ValidationResponse resp = buildResponse(ValidationResult.VALID, ValidationMotif.OK);
             enrichWithClientInfo(resp, client, billet);
@@ -247,6 +289,38 @@ public class ValidationService {
         }
         if (currentOrder > endOrder) {
             return ValidationMotif.HORS_PARCOURS_AUTORISE;
+        }
+        ServiceFerroviaire service = segmentBillet.getService();
+        if (service == null || service.getDateTrajet() == null) {
+            return null;
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDate serviceDate = service.getDateTrajet();
+        if (now.toLocalDate().isBefore(serviceDate)) {
+            return ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT;
+        }
+        if (now.toLocalDate().isAfter(serviceDate.plusDays(MAX_SERVICE_AGE_DAYS))) {
+            return ValidationMotif.TRAJET_TERMINE;
+        }
+
+        LocalTime departureTime = service.getHeureDepart() != null ? service.getHeureDepart() : LocalTime.MIDNIGHT;
+        int delayMinutes = service.getRetardMinutes() != null ? service.getRetardMinutes() : 0;
+        LocalDateTime effectiveDeparture = LocalDateTime.of(serviceDate, departureTime).plusMinutes(delayMinutes);
+        long checkpointOffsetMinutes = (long) Math.max(0, currentOrder - 1) * MIN_MINUTES_PER_CHECKPOINT_HOP;
+        LocalDateTime earliestCheckpointValidation = effectiveDeparture
+                .plusMinutes(checkpointOffsetMinutes)
+                .minusMinutes(EARLY_VALIDATION_GRACE_MINUTES);
+        if (now.isBefore(earliestCheckpointValidation)) {
+            return ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT;
+        }
+
+        long finalCheckpointOffsetMinutes = (long) Math.max(0, endOrder - 1) * MIN_MINUTES_PER_CHECKPOINT_HOP;
+        LocalDateTime latestAllowedValidation = effectiveDeparture
+                .plusMinutes(finalCheckpointOffsetMinutes)
+                .plusMinutes(FINAL_CHECKPOINT_GRACE_MINUTES);
+        if (now.isAfter(latestAllowedValidation)) {
+            return ValidationMotif.TRAJET_TERMINE;
         }
         return null;
     }
