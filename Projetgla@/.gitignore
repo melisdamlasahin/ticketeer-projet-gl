@@ -2,3 +2,5 @@
 .gradle/
 build/
 *.jar
+Projetgla@/.gradle-home/
+.gradle-home/
