@@ -1,0 +1,14 @@
+package ticket_train.ticketeer.model.enums;
+
+public enum ValidationMotif {
+    OK,
+    BILLET_INCONNU,
+    DEJA_VALIDE,
+    NON_CONFORME_SERVICE,
+    HORS_PARCOURS_AUTORISE,
+    AVANT_ZONE_DE_VALIDITE,
+    TRAJET_TERMINE,
+    VALIDATION_IMPOSSIBLE_TEMPORAIREMENT,
+    CODE_ILLISIBLE,
+    QR_SIGNATURE_INVALIDE
+}
