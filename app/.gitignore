@@ -1,0 +1,6 @@
+.gradle-home/
+Projetgla@/.gradle-home/
+.gradle/
+build/
+*.jar
+*.tar.gz
