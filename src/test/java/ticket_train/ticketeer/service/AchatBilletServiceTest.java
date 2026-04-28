@@ -86,7 +86,7 @@ class AchatBilletServiceTest {
         );
         service.setServiceId(serviceId);
 
-        when(clientTokenService.resolveClientId("token")).thenReturn(Optional.of(clientId));
+        when(clientTokenService.requireAuthenticatedClientId()).thenReturn(clientId);
         when(clientRepository.findById(clientId)).thenReturn(Optional.of(client));
         when(serviceFerroviaireRepository.findById(serviceId)).thenReturn(Optional.of(service));
         when(billetRepository.existsByCodeOptique(any())).thenReturn(false);
@@ -103,7 +103,7 @@ class AchatBilletServiceTest {
         request.setServiceId(serviceId.toString());
         request.setProfilTarifaire("STANDARD");
 
-        AchatBilletResponse response = mobileApiService.confirmerAchat("token", request);
+        AchatBilletResponse response = mobileApiService.confirmerAchat(request);
 
         assertTrue(response.getSuccess());
         assertEquals(100.0, response.getPrixFinal());
@@ -132,7 +132,7 @@ class AchatBilletServiceTest {
         );
         returnService.setServiceId(returnServiceId);
 
-        when(clientTokenService.resolveClientId("token")).thenReturn(Optional.of(clientId));
+        when(clientTokenService.requireAuthenticatedClientId()).thenReturn(clientId);
         when(clientRepository.findById(clientId)).thenReturn(Optional.of(client));
         when(serviceFerroviaireRepository.findById(serviceId)).thenReturn(Optional.of(outboundService));
         when(serviceFerroviaireRepository.findById(returnServiceId)).thenReturn(Optional.of(returnService));
@@ -151,7 +151,7 @@ class AchatBilletServiceTest {
         request.setReturnServiceId(returnServiceId.toString());
         request.setProfilTarifaire("STANDARD");
 
-        AchatBilletResponse response = mobileApiService.confirmerAchat("token", request);
+        AchatBilletResponse response = mobileApiService.confirmerAchat(request);
 
         ArgumentCaptor<Billet> billetCaptor = ArgumentCaptor.forClass(Billet.class);
         verify(billetRepository, org.mockito.Mockito.atLeastOnce()).save(billetCaptor.capture());

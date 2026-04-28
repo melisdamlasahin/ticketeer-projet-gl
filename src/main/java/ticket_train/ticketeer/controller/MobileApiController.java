@@ -9,9 +9,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
 import ticket_train.ticketeer.dto.mobile.AchatBilletRequest;
 import ticket_train.ticketeer.dto.mobile.AchatBilletResponse;
 import ticket_train.ticketeer.dto.mobile.AuthResponse;
@@ -42,56 +42,54 @@ public class MobileApiController {
     }
 
     @PostMapping("/auth/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
-        return mobileApiService.login(request);
+    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        return mobileApiService.login(request, extractSourceIp(httpRequest));
     }
 
     @PostMapping("/auth/register")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return mobileApiService.register(request);
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        return mobileApiService.register(request, extractSourceIp(httpRequest));
+    }
+
+    @PostMapping("/auth/logout")
+    public AuthResponse logout(HttpServletRequest httpRequest) {
+        return mobileApiService.logout(extractSourceIp(httpRequest));
     }
 
     @GetMapping("/clients/{clientId}/profile")
-    public ClientProfileResponse getProfile(@RequestHeader("X-Auth-Token") String authToken,
-                                            @PathVariable String clientId) {
-        return mobileApiService.getProfile(authToken, clientId);
+    public ClientProfileResponse getProfile(@PathVariable String clientId) {
+        return mobileApiService.getProfile(clientId);
     }
 
     @PutMapping("/clients/{clientId}/profile")
-    public ClientProfileResponse updateProfile(@RequestHeader("X-Auth-Token") String authToken,
-                                               @PathVariable String clientId,
+    public ClientProfileResponse updateProfile(@PathVariable String clientId,
                                                @Valid @RequestBody UpdateProfileRequest request) {
-        return mobileApiService.updateProfile(authToken, clientId, request);
+        return mobileApiService.updateProfile(clientId, request);
     }
 
     @PostMapping("/achat/tarif")
-    public TarificationResponse calculerTarif(@RequestHeader("X-Auth-Token") String authToken,
-                                              @Valid @RequestBody AchatBilletRequest request) {
-        return mobileApiService.calculerTarif(authToken, request);
+    public TarificationResponse calculerTarif(@Valid @RequestBody AchatBilletRequest request) {
+        return mobileApiService.calculerTarif(request);
     }
 
     @PostMapping("/achat/confirmer")
-    public AchatBilletResponse confirmerAchat(@RequestHeader("X-Auth-Token") String authToken,
-                                              @Valid @RequestBody AchatBilletRequest request) {
-        return mobileApiService.confirmerAchat(authToken, request);
+    public AchatBilletResponse confirmerAchat(@Valid @RequestBody AchatBilletRequest request) {
+        return mobileApiService.confirmerAchat(request);
     }
 
     @GetMapping("/billets/{id}")
-    public TicketResponse getBillet(@RequestHeader("X-Auth-Token") String authToken,
-                                    @PathVariable("id") String billetId) {
-        return mobileApiService.getBillet(authToken, billetId);
+    public TicketResponse getBillet(@PathVariable("id") String billetId) {
+        return mobileApiService.getBillet(billetId);
     }
 
     @GetMapping("/billets/client/{clientId}")
-    public List<TicketResponse> getBilletsByClient(@RequestHeader("X-Auth-Token") String authToken,
-                                                   @PathVariable String clientId) {
-        return mobileApiService.getBilletsByClient(authToken, clientId);
+    public List<TicketResponse> getBilletsByClient(@PathVariable String clientId) {
+        return mobileApiService.getBilletsByClient(clientId);
     }
 
     @GetMapping("/billets/{id}/pdf")
-    public ResponseEntity<byte[]> getBilletPdf(@RequestHeader("X-Auth-Token") String authToken,
-                                               @PathVariable("id") String billetId) {
-        byte[] pdf = mobileApiService.buildTicketPdf(authToken, billetId);
+    public ResponseEntity<byte[]> getBilletPdf(@PathVariable("id") String billetId) {
+        byte[] pdf = mobileApiService.buildTicketPdf(billetId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ticket-" + billetId + ".pdf\"")
                 .contentType(MediaType.APPLICATION_PDF)
@@ -99,15 +97,22 @@ public class MobileApiController {
     }
 
     @PostMapping("/billets/{id}/cancel")
-    public TicketResponse cancelBillet(@RequestHeader("X-Auth-Token") String authToken,
-                                       @PathVariable("id") String billetId) {
-        return mobileApiService.cancelBillet(authToken, billetId);
+    public TicketResponse cancelBillet(@PathVariable("id") String billetId) {
+        return mobileApiService.cancelBillet(billetId);
     }
 
     @PutMapping("/billets/{id}")
-    public TicketResponse updateBillet(@RequestHeader("X-Auth-Token") String authToken,
-                                       @PathVariable("id") String billetId,
+    public TicketResponse updateBillet(@PathVariable("id") String billetId,
                                        @Valid @RequestBody AchatBilletRequest request) {
-        return mobileApiService.updateBillet(authToken, billetId, request);
+        return mobileApiService.updateBillet(billetId, request);
+    }
+
+    private String extractSourceIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            int commaIndex = forwarded.indexOf(',');
+            return commaIndex >= 0 ? forwarded.substring(0, commaIndex).trim() : forwarded.trim();
+        }
+        return request.getRemoteAddr();
     }
 }

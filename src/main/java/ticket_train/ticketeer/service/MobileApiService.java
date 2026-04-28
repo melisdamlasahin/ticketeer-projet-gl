@@ -40,6 +40,7 @@ public class MobileApiService {
     private final TarificationService tarificationService;
     private final MobileTicketService mobileTicketService;
     private final ClientTokenService clientTokenService;
+    private final SecurityAuditService securityAuditService;
 
     @Autowired
     public MobileApiService(
@@ -48,7 +49,8 @@ public class MobileApiService {
             MobileAuthService mobileAuthService,
             TarificationService tarificationService,
             MobileTicketService mobileTicketService,
-            ClientTokenService clientTokenService
+            ClientTokenService clientTokenService,
+            SecurityAuditService securityAuditService
     ) {
         this.serviceFerroviaireRepository = serviceFerroviaireRepository;
         this.billetRepository = billetRepository;
@@ -56,6 +58,7 @@ public class MobileApiService {
         this.tarificationService = tarificationService;
         this.mobileTicketService = mobileTicketService;
         this.clientTokenService = clientTokenService;
+        this.securityAuditService = securityAuditService;
     }
 
     MobileApiService(
@@ -70,7 +73,13 @@ public class MobileApiService {
         TarificationService localTarificationService = new TarificationService();
         this.serviceFerroviaireRepository = serviceFerroviaireRepository;
         this.billetRepository = billetRepository;
-        this.mobileAuthService = new MobileAuthService(clientRepository, passwordEncoder, clientTokenService);
+        this.mobileAuthService = new MobileAuthService(
+                clientRepository,
+                passwordEncoder,
+                clientTokenService,
+                new LoginAttemptService(5, java.time.Duration.ofMinutes(15), java.time.Clock.systemUTC()),
+                new SecurityAuditService()
+        );
         this.tarificationService = localTarificationService;
         this.mobileTicketService = new MobileTicketService(
                 billetRepository,
@@ -79,15 +88,20 @@ public class MobileApiService {
                 localTarificationService
         );
         this.clientTokenService = clientTokenService;
+        this.securityAuditService = new SecurityAuditService();
     }
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        return mobileAuthService.register(request);
+    public AuthResponse register(RegisterRequest request, String sourceIp) {
+        return mobileAuthService.register(request, sourceIp);
     }
 
-    public AuthResponse login(LoginRequest request) {
-        return mobileAuthService.login(request);
+    public AuthResponse login(LoginRequest request, String sourceIp) {
+        return mobileAuthService.login(request, sourceIp);
+    }
+
+    public AuthResponse logout(String sourceIp) {
+        return mobileAuthService.logout(sourceIp);
     }
 
     public List<ServiceResponse> getServices() {
@@ -99,16 +113,29 @@ public class MobileApiService {
     }
 
     public ClientProfileResponse getProfile(String token, String clientId) {
-        return mobileAuthService.getProfile(token, clientId);
+        return getProfile(clientId);
+    }
+
+    public ClientProfileResponse getProfile(String clientId) {
+        return mobileAuthService.getProfile(clientId);
     }
 
     @Transactional
     public ClientProfileResponse updateProfile(String token, String clientId, UpdateProfileRequest request) {
-        return mobileAuthService.updateProfile(token, clientId, request);
+        return updateProfile(clientId, request);
+    }
+
+    @Transactional
+    public ClientProfileResponse updateProfile(String clientId, UpdateProfileRequest request) {
+        return mobileAuthService.updateProfile(clientId, request);
     }
 
     public TarificationResponse calculerTarif(String token, AchatBilletRequest request) {
-        mobileAuthService.requireAuthorizedClient(token, request.getClientId());
+        return calculerTarif(request);
+    }
+
+    public TarificationResponse calculerTarif(AchatBilletRequest request) {
+        mobileAuthService.requireAuthorizedClient(request.getClientId());
         ServiceFerroviaire service = requireService(request.getServiceId());
         Optional<ServiceFerroviaire> returnService = resolveReturnService(request.getReturnServiceId(), service);
         return tarificationService.buildTarificationResponse(
@@ -121,7 +148,12 @@ public class MobileApiService {
 
     @Transactional
     public AchatBilletResponse confirmerAchat(String token, AchatBilletRequest request) {
-        Client client = mobileAuthService.requireAuthorizedClient(token, request.getClientId());
+        return confirmerAchat(request);
+    }
+
+    @Transactional
+    public AchatBilletResponse confirmerAchat(AchatBilletRequest request) {
+        Client client = mobileAuthService.requireAuthorizedClient(request.getClientId());
         ServiceFerroviaire service = requireService(request.getServiceId());
         Optional<ServiceFerroviaire> returnService = resolveReturnService(request.getReturnServiceId(), service);
         return mobileTicketService.createTicket(
@@ -134,29 +166,51 @@ public class MobileApiService {
     }
 
     public TicketResponse getBillet(String token, String billetId) {
-        Billet billet = requireAuthorizedTicket(token, billetId);
+        return getBillet(billetId);
+    }
+
+    public TicketResponse getBillet(String billetId) {
+        Billet billet = requireAuthorizedTicket(billetId);
         return mobileTicketService.toTicketResponse(billet);
     }
 
     public List<TicketResponse> getBilletsByClient(String token, String clientId) {
-        Client client = mobileAuthService.requireAuthorizedClient(token, clientId);
+        return getBilletsByClient(clientId);
+    }
+
+    public List<TicketResponse> getBilletsByClient(String clientId) {
+        Client client = mobileAuthService.requireAuthorizedClient(clientId);
         return mobileTicketService.toTicketResponses(billetRepository.findByClientClientId(client.getClientId()));
     }
 
     public byte[] buildTicketPdf(String token, String billetId) {
-        TicketResponse ticket = getBillet(token, billetId);
+        return buildTicketPdf(billetId);
+    }
+
+    public byte[] buildTicketPdf(String billetId) {
+        TicketResponse ticket = getBillet(billetId);
         return mobileTicketService.buildTicketPdf(ticket);
     }
 
     @Transactional
     public TicketResponse cancelBillet(String token, String billetId) {
-        Billet billet = requireAuthorizedTicket(token, billetId);
+        return cancelBillet(billetId);
+    }
+
+    @Transactional
+    public TicketResponse cancelBillet(String billetId) {
+        Billet billet = requireAuthorizedTicket(billetId);
         return mobileTicketService.cancelTicket(billet);
     }
 
     @Transactional
     public TicketResponse updateBillet(String token, String billetId, AchatBilletRequest request) {
-        Billet billet = requireAuthorizedTicket(token, billetId);
+        return updateBillet(billetId, request);
+    }
+
+    @Transactional
+    public TicketResponse updateBillet(String billetId, AchatBilletRequest request) {
+        Billet billet = requireAuthorizedTicket(billetId);
         return mobileTicketService.updateTicket(billet, request);
     }
 
@@ -175,12 +229,16 @@ public class MobileApiService {
     }
 
     private Billet requireAuthorizedTicket(String token, String billetId) {
+        return requireAuthorizedTicket(billetId);
+    }
+
+    private Billet requireAuthorizedTicket(String billetId) {
         UUID requestedId = parseUuid(billetId, "Billet invalide");
-        UUID tokenClientId = clientTokenService.resolveClientId(token)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Auth token invalide"));
+        UUID tokenClientId = clientTokenService.requireAuthenticatedClientId();
         Billet billet = billetRepository.findById(requestedId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Billet introuvable"));
         if (!billet.getClient().getClientId().equals(tokenClientId)) {
+            securityAuditService.logForbiddenTicketAccess(tokenClientId, requestedId);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès refusé");
         }
         return billet;

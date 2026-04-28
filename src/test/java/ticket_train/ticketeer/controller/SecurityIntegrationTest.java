@@ -10,6 +10,7 @@ import ticket_train.ticketeer.service.ControlUnitAuthService;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,5 +39,18 @@ class SecurityIntegrationTest {
                         .content("{\"codeOptique\":\"CODE\",\"serviceId\":\"00000000-0000-0000-0000-000000000000\"}"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/controleur/login"));
+    }
+
+    @Test
+    void protectedMobileApiReturnsJsonUnauthorizedWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/clients/00000000-0000-0000-0000-000000000000/profile"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Auth token manquant"));
+    }
+
+    @Test
+    void publicMobileServicesEndpointStaysAccessible() throws Exception {
+        mockMvc.perform(get("/api/services"))
+                .andExpect(status().isOk());
     }
 }

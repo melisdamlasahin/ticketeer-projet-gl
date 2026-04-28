@@ -32,14 +32,26 @@ public class Validation {
     @JoinColumn(name = "segment_id", nullable = false)
     private SegmentBillet segment;
 
+    @Column
+    private Integer checkpointOrder;
+
     public Validation() {}
 
     public Validation(ValidationResult resultat, ValidationMotif motif, Controleur controleur, SegmentBillet segment) {
+        this(resultat, motif, controleur, segment, null);
+    }
+
+    public Validation(ValidationResult resultat,
+                      ValidationMotif motif,
+                      Controleur controleur,
+                      SegmentBillet segment,
+                      Integer checkpointOrder) {
         this.timestampControle = LocalDateTime.now();
         this.resultat = resultat;
         this.motif = motif;
         this.controleur = controleur;
         this.segment = segment;
+        this.checkpointOrder = checkpointOrder;
     }
 
     // Getters et Setters
@@ -55,4 +67,6 @@ public class Validation {
     public void setControleur(Controleur controleur) { this.controleur = controleur; }
     public SegmentBillet getSegment() { return segment; }
     public void setSegment(SegmentBillet segment) { this.segment = segment; }
+    public Integer getCheckpointOrder() { return checkpointOrder; }
+    public void setCheckpointOrder(Integer checkpointOrder) { this.checkpointOrder = checkpointOrder; }
 }
