@@ -4,3 +4,13 @@ build/
 *.jar
 Projetgla@/.gradle-home/
 .gradle-home/
+build/
+target/
+.idea/
+.DS_Store
+Projetgla@/.gradle-home/
+Projetgla@/mysql-data/
+Projetgla@/.idea/
+Projetgla@/**/build/
+Projetgla@/**/target/
+.DS_Store

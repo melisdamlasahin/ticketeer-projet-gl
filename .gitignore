@@ -3,3 +3,6 @@
 *.iml
 *.log
 .DS_Store
+Projetgla@/.gradle-home/
+Projetgla@/mysql-data/
+Projetgla@/**/build/
