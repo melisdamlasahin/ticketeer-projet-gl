@@ -6,6 +6,7 @@ import ticket_train.ticketeer.model.ServiceFerroviaire;
 import ticket_train.ticketeer.repository.ServiceFerroviaireRepository;
 import ticket_train.ticketeer.service.ControlUnitAuthService;
 import ticket_train.ticketeer.service.ValidationTraceService;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;

@@ -370,10 +370,10 @@
                          th:classappend="${trace.resultat.name() == 'VALID'} ? ' valid' : ' invalid'"
                          class="audit-item">
                         <div class="audit-head">
-                            <span class="audit-train" th:text="${trace.segment.service.train.nomTrain}">TGV100</span>
+                            <span class="audit-train" th:text="${trace.segment != null ? trace.segment.service.train.nomTrain : 'Code non rattache'}">TGV100</span>
                             <span class="audit-time" th:text="${#temporals.format(trace.timestampControle, 'dd/MM HH:mm')}">26/04 17:30</span>
                         </div>
-                        <div class="audit-route" th:text="${trace.segment.service.villeDepart.nom + ' -> ' + trace.segment.service.villeArrivee.nom}">Paris -> Lyon</div>
+                        <div class="audit-route" th:text="${trace.segment != null ? trace.segment.service.villeDepart.nom + ' -> ' + trace.segment.service.villeArrivee.nom : 'Aucun segment associe'}">Paris -> Lyon</div>
                         <div class="audit-motif" th:text="${trace.motif.name()}">OK</div>
                         <span th:classappend="${trace.resultat.name() == 'VALID'} ? ' valid' : ' invalid'"
                               class="audit-result"

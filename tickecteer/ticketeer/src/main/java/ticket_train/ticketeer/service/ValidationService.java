@@ -109,20 +109,20 @@ public class ValidationService {
             UUID checkpointId = request.getCheckpointId();
 
             if (codeOptique == null || codeOptique.isBlank()) {
-                return buildResponse(ValidationResult.INVALID, ValidationMotif.CODE_ILLISIBLE);
+                return reject(controleur, request, null, ValidationMotif.CODE_ILLISIBLE, null);
             }
-            if (serviceId == null) {
-                return buildResponse(ValidationResult.INVALID, ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT);
+            if (serviceId == null || checkpointId == null) {
+                return reject(controleur, request, null, ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT, null);
             }
 
             BilletLookupResult lookupResult = resolveBilletFromSubmittedCode(codeOptique);
             if (lookupResult.motif != null) {
-                return buildResponse(ValidationResult.INVALID, lookupResult.motif);
+                return reject(controleur, request, null, lookupResult.motif, null);
             }
 
             Optional<Billet> billetOpt = lookupResult.billet;
             if (billetOpt.isEmpty()) {
-                return buildResponse(ValidationResult.INVALID, ValidationMotif.BILLET_INCONNU);
+                return reject(controleur, request, null, ValidationMotif.BILLET_INCONNU, null);
             }
 
             Billet billet = billetOpt.get();
@@ -137,7 +137,7 @@ public class ValidationService {
             }
 
             if (segmentTrouve == null) {
-                ValidationResponse resp = buildResponse(ValidationResult.INVALID, ValidationMotif.NON_CONFORME_SERVICE);
+                ValidationResponse resp = reject(controleur, request, null, ValidationMotif.NON_CONFORME_SERVICE, null);
                 enrichWithClientInfo(resp, client, billet);
                 return resp;
             }
@@ -145,8 +145,22 @@ public class ValidationService {
             ServiceCheckpoint currentCheckpoint = resolveCurrentCheckpoint(segmentTrouve, checkpointId);
             if (currentCheckpoint == null || currentCheckpoint.getService() == null
                     || !currentCheckpoint.getService().getServiceId().equals(serviceId)) {
-                ValidationResponse resp = buildResponse(ValidationResult.INVALID, ValidationMotif.NON_CONFORME_SERVICE);
+                ValidationResponse resp = reject(controleur, request, segmentTrouve, ValidationMotif.NON_CONFORME_SERVICE, currentCheckpoint);
                 enrichWithClientInfo(resp, client, billet);
+                return resp;
+            }
+
+            ValidationMotif journeyWindowIssue = detectJourneyWindowIssue(segmentTrouve, currentCheckpoint);
+            if (journeyWindowIssue != null) {
+                securityAuditService.logJourneyWindowViolation(journeyWindowIssue, segmentTrouve, currentCheckpoint);
+                if (journeyWindowIssue == ValidationMotif.TRAJET_TERMINE) {
+                    segmentTrouve.setEtatSegment(SegmentStatus.INVALIDE);
+                    segmentBilletRepository.save(segmentTrouve);
+                }
+                ValidationResponse resp = buildResponse(ValidationResult.INVALID, journeyWindowIssue);
+                enrichWithClientInfo(resp, client, billet);
+                enrichWithJourneyContext(resp, segmentTrouve, currentCheckpoint);
+                trace(controleur, request, segmentTrouve, ValidationResult.INVALID, journeyWindowIssue, currentCheckpoint);
                 return resp;
             }
 
@@ -156,21 +170,7 @@ public class ValidationService {
                 ValidationResponse resp = buildResponse(ValidationResult.INVALID, fraudMotif);
                 enrichWithClientInfo(resp, client, billet);
                 enrichWithJourneyContext(resp, segmentTrouve, currentCheckpoint);
-                if (segmentTrouve != null) {
-                    validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.INVALID, fraudMotif, currentCheckpoint);
-                }
-                return resp;
-            }
-
-            ValidationMotif journeyWindowIssue = detectJourneyWindowIssue(segmentTrouve, currentCheckpoint);
-            if (journeyWindowIssue != null) {
-                securityAuditService.logJourneyWindowViolation(journeyWindowIssue, segmentTrouve, currentCheckpoint);
-                segmentTrouve.setEtatSegment(SegmentStatus.INVALIDE);
-                segmentBilletRepository.save(segmentTrouve);
-                ValidationResponse resp = buildResponse(ValidationResult.INVALID, journeyWindowIssue);
-                enrichWithClientInfo(resp, client, billet);
-                enrichWithJourneyContext(resp, segmentTrouve, currentCheckpoint);
-                validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.INVALID, journeyWindowIssue, currentCheckpoint);
+                trace(controleur, request, segmentTrouve, ValidationResult.INVALID, fraudMotif, currentCheckpoint);
                 return resp;
             }
 
@@ -180,7 +180,7 @@ public class ValidationService {
             updateBilletStatus(billet);
             billetRepository.save(billet);
 
-            validationTraceService.saveTrace(controleur, segmentTrouve, ValidationResult.VALID, ValidationMotif.OK, currentCheckpoint);
+            trace(controleur, request, segmentTrouve, ValidationResult.VALID, ValidationMotif.OK, currentCheckpoint);
 
             ValidationResponse resp = buildResponse(ValidationResult.VALID, ValidationMotif.OK);
             enrichWithClientInfo(resp, client, billet);
@@ -244,6 +244,33 @@ public class ValidationService {
         return new ValidationResponse(resultat, motif);
     }
 
+    private ValidationResponse reject(Controleur controleur,
+                                      ValidationRequest request,
+                                      SegmentBillet segment,
+                                      ValidationMotif motif,
+                                      ServiceCheckpoint checkpoint) {
+        trace(controleur, request, segment, ValidationResult.INVALID, motif, checkpoint);
+        return buildResponse(ValidationResult.INVALID, motif);
+    }
+
+    private void trace(Controleur controleur,
+                       ValidationRequest request,
+                       SegmentBillet segment,
+                       ValidationResult result,
+                       ValidationMotif motif,
+                       ServiceCheckpoint checkpoint) {
+        validationTraceService.saveAttemptTrace(
+                controleur,
+                request != null ? request.getCodeOptique() : null,
+                request != null ? request.getServiceId() : null,
+                request != null ? request.getCheckpointId() : null,
+                segment,
+                result,
+                motif,
+                checkpoint
+        );
+    }
+
     private void markRollbackIfPossible() {
         try {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -255,7 +282,7 @@ public class ValidationService {
     private BilletLookupResult resolveBilletFromSubmittedCode(String submittedCode) {
         SignedQrService.ParseResult parseResult = signedQrService.parseAndVerify(submittedCode);
         if (parseResult.getStatus() == SignedQrService.ParseStatus.NOT_SIGNED) {
-            return new BilletLookupResult(billetRepository.findByCodeOptique(submittedCode), null);
+            return new BilletLookupResult(billetRepository.findByCodeOptiqueForUpdate(submittedCode), null);
         }
         if (parseResult.getStatus() == SignedQrService.ParseStatus.INVALID_SIGNATURE) {
             return new BilletLookupResult(Optional.empty(), ValidationMotif.QR_SIGNATURE_INVALIDE);
@@ -265,7 +292,7 @@ public class ValidationService {
         }
 
         SignedQrService.SignedQrPayload qrPayload = parseResult.getPayload().orElseThrow();
-        Optional<Billet> billetOpt = billetRepository.findById(qrPayload.getBilletId());
+        Optional<Billet> billetOpt = billetRepository.findByTicketIdForUpdate(qrPayload.getBilletId());
         if (billetOpt.isEmpty()) {
             return new BilletLookupResult(Optional.empty(), null);
         }
@@ -333,14 +360,10 @@ public class ValidationService {
     }
 
     private ServiceCheckpoint resolveCurrentCheckpoint(SegmentBillet segmentBillet, UUID checkpointId) {
-        if (serviceCheckpointRepository != null && checkpointId != null) {
-            return serviceCheckpointRepository.findById(checkpointId).orElse(null);
+        if (serviceCheckpointRepository == null || checkpointId == null) {
+            return null;
         }
-        ServiceCheckpoint fallback = new ServiceCheckpoint();
-        fallback.setService(segmentBillet.getService());
-        fallback.setVille(segmentBillet.getService().getVilleDepart());
-        fallback.setOrdre(1);
-        return fallback;
+        return serviceCheckpointRepository.findById(checkpointId).orElse(null);
     }
 
     private static final class BilletLookupResult {

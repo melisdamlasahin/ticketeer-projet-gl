@@ -1,8 +1,11 @@
 package ticket_train.ticketeer.config;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import ticket_train.ticketeer.model.Billet;
 import ticket_train.ticketeer.model.Client;
 import ticket_train.ticketeer.model.Controleur;
@@ -11,6 +14,7 @@ import ticket_train.ticketeer.model.ServiceCheckpoint;
 import ticket_train.ticketeer.model.ServiceFerroviaire;
 import ticket_train.ticketeer.model.Train;
 import ticket_train.ticketeer.model.Ville;
+import ticket_train.ticketeer.model.enums.SegmentStatus;
 import ticket_train.ticketeer.model.enums.TicketStatus;
 import ticket_train.ticketeer.repository.BilletRepository;
 import ticket_train.ticketeer.repository.ClientRepository;
@@ -22,6 +26,8 @@ import ticket_train.ticketeer.repository.TrainRepository;
 import ticket_train.ticketeer.repository.VilleRepository;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -38,6 +44,7 @@ public class DataInitializer implements CommandLineRunner {
     private final BilletRepository billetRepository;
     private final SegmentBilletRepository segmentBilletRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     public DataInitializer(
             ControleurRepository controleurRepository,
@@ -48,7 +55,8 @@ public class DataInitializer implements CommandLineRunner {
             ServiceCheckpointRepository serviceCheckpointRepository,
             BilletRepository billetRepository,
             SegmentBilletRepository segmentBilletRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            JdbcTemplate jdbcTemplate
     ) {
         this.controleurRepository = controleurRepository;
         this.clientRepository = clientRepository;
@@ -59,19 +67,36 @@ public class DataInitializer implements CommandLineRunner {
         this.billetRepository = billetRepository;
         this.segmentBilletRepository = segmentBilletRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
+    @Transactional
     public void run(String... args) {
+        relaxValidationTraceSchemaForRejectedTickets();
         ensureControllers();
         ensureClients();
         ensureServices();
         ensureCheckpoints();
         ensureSampleTicket();
+        ensureValidationDemoCases();
         upgradeLegacyPasswords();
     }
 
+    private void relaxValidationTraceSchemaForRejectedTickets() {
+        try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
+            String database = connection.getMetaData().getDatabaseProductName();
+            if (database != null && database.toLowerCase().contains("mysql")) {
+                jdbcTemplate.execute("ALTER TABLE validations MODIFY segment_id BINARY(16) NULL");
+                jdbcTemplate.execute("ALTER TABLE segments_billet MODIFY etat_segment VARCHAR(20) NOT NULL");
+            }
+        } catch (DataAccessException | SQLException | NullPointerException ignored) {
+            // Fresh schemas are already correct; this only repairs older local databases.
+        }
+    }
+
     private void ensureControllers() {
+        ensureController("melis", "melis123", "Sahin", "Melis");
         ensureController("nathan", "anne123", "Petit", "Paul");
         ensureController("christian", "essome123", "Robert", "Sophie");
     }
@@ -146,12 +171,14 @@ public class DataInitializer implements CommandLineRunner {
                 routePlan("2026-03-18", 89.90, "2026-03-21", 84.90),
                 routePlan("2026-04-10", 92.50, "2026-04-12", 88.40),
                 routePlan("2026-05-03", 86.20, "2026-05-05", 82.70),
+                routePlan("2026-05-15", "06:15", 88.90, "2026-05-15", "14:30", 86.40),
                 routePlan("2026-05-17", 90.10, "2026-05-20", 87.10)
         ));
 
         ensureRoundTripSeries(tgv200, tgv201, lyon, marseille, List.of(
                 routePlan("2026-03-20", 75.50, "2026-03-23", 73.00),
                 routePlan("2026-04-15", 78.00, "2026-04-18", 76.50),
+                routePlan("2026-05-15", "06:45", 80.20, "2026-05-15", "15:10", 78.30),
                 routePlan("2026-05-09", 79.90, "2026-05-11", 77.80)
         ));
 
@@ -200,6 +227,7 @@ public class DataInitializer implements CommandLineRunner {
         ensureRoundTripSeries(tgv1000, tgv1001, paris, marseille, List.of(
                 routePlan("2026-04-14", 118.00, "2026-04-19", 112.00),
                 routePlan("2026-05-13", 121.50, "2026-05-16", 116.90),
+                routePlan("2026-05-15", "06:00", 122.90, "2026-05-15", "16:15", 117.40),
                 routePlan("2026-05-30", 124.00, "2026-06-02", 118.40)
         ));
 
@@ -212,6 +240,7 @@ public class DataInitializer implements CommandLineRunner {
         ensureRoundTripSeries(tgv1200, tgv1201, paris, bordeaux, List.of(
                 routePlan("2026-04-09", 88.50, "2026-04-12", 85.90),
                 routePlan("2026-05-04", 90.20, "2026-05-06", 87.40),
+                routePlan("2026-05-15", "06:30", 91.30, "2026-05-15", "15:45", 88.20),
                 routePlan("2026-05-23", 91.80, "2026-05-26", 88.70)
         ));
 
@@ -226,10 +255,12 @@ public class DataInitializer implements CommandLineRunner {
 
         ensureRoundTripSeries(tgv1400, tgv1401, paris, marseille, List.of(
                 routePlan("2026-05-13", "06:50", 126.00, "2026-05-16", "07:30", 119.00),
+                routePlan("2026-05-15", "07:00", 127.20, "2026-05-15", "13:30", 120.50),
                 routePlan("2026-05-30", "06:45", 128.00, "2026-06-02", "07:20", 121.80)
         ));
         ensureRoundTripSeries(tgv1402, tgv1403, paris, marseille, List.of(
                 routePlan("2026-05-13", "17:35", 131.50, "2026-05-16", "18:05", 124.00),
+                routePlan("2026-05-15", "08:30", 129.90, "2026-05-15", "17:45", 123.20),
                 routePlan("2026-05-30", "17:50", 133.40, "2026-06-02", "18:20", 126.10)
         ));
 
@@ -293,6 +324,118 @@ public class DataInitializer implements CommandLineRunner {
                 .orElse(2));
         segment.setBillet(billet);
         billet.getSegments().add(segment);
+        segmentBilletRepository.save(segment);
+        billetRepository.save(billet);
+    }
+
+    private void ensureValidationDemoCases() {
+        Client client = clientRepository.findByEmail("jean.dupont@ticketeer.test").orElse(null);
+        if (client == null) {
+            return;
+        }
+
+        Ville paris = ensureVille("Paris");
+        Ville lyon = ensureVille("Lyon");
+        Ville marseille = ensureVille("Marseille");
+
+        ServiceFerroviaire demoParisMarseille = ensureDemoService(
+                "DEMO100",
+                "DEMO Paris-Marseille",
+                LocalDate.now(),
+                LocalTime.now().minusMinutes(20),
+                paris,
+                marseille,
+                10.00
+        );
+        ensureCheckpointExists(demoParisMarseille, paris, 1);
+        ensureCheckpointExists(demoParisMarseille, lyon, 2);
+        ensureCheckpointExists(demoParisMarseille, marseille, 3);
+
+        ServiceFerroviaire demoParisLyon = ensureDemoService(
+                "DEMO200",
+                "DEMO Paris-Lyon",
+                LocalDate.now(),
+                LocalTime.now().minusMinutes(20),
+                paris,
+                lyon,
+                8.00
+        );
+        ensureCheckpointExists(demoParisLyon, paris, 1);
+        ensureCheckpointExists(demoParisLyon, lyon, 2);
+
+        ServiceFerroviaire expiredService = ensureDemoService(
+                "DEMO999",
+                "DEMO Trajet Expire",
+                LocalDate.now().minusDays(3),
+                LocalTime.of(8, 0),
+                paris,
+                lyon,
+                5.00
+        );
+        ensureCheckpointExists(expiredService, paris, 1);
+        ensureCheckpointExists(expiredService, lyon, 2);
+
+        ensureDemoTicket("SNCF-20260514-PM-7K4Q92", client, demoParisMarseille, SegmentStatus.PREVU, 1, 3);
+        ensureDemoTicket("SNCF-20260514-PM-3H8D51", client, demoParisMarseille, SegmentStatus.VALIDE, 1, 3);
+        ensureDemoTicket("SNCF-20260514-PL-9M2X74", client, demoParisMarseille, SegmentStatus.PREVU, 1, 2);
+        ensureDemoTicket("SNCF-20260514-PL-4R7N26", client, demoParisMarseille, SegmentStatus.PREVU, 1, 2);
+        ensureDemoTicket("SNCF-20260514-PL-8V5C63", client, demoParisMarseille, SegmentStatus.PREVU, 1, 2);
+        ensureDemoTicket("SNCF-20260511-EX-6T1B38", client, expiredService, SegmentStatus.PREVU, 1, 2);
+    }
+
+    private ServiceFerroviaire ensureDemoService(String trainId,
+                                                String trainName,
+                                                LocalDate dateTrajet,
+                                                LocalTime heureDepart,
+                                                Ville villeDepart,
+                                                Ville villeArrivee,
+                                                double prixBase) {
+        Train train = ensureTrain(trainId, trainName);
+        return serviceFerroviaireRepository.findByTrainTrainIdAndDateTrajetAndVilleDepartNomAndVilleArriveeNom(
+                trainId,
+                dateTrajet,
+                villeDepart.getNom(),
+                villeArrivee.getNom()
+        ).orElseGet(() -> serviceFerroviaireRepository.save(
+                new ServiceFerroviaire(dateTrajet, heureDepart, train, villeDepart, villeArrivee, prixBase)
+        ));
+    }
+
+    private void ensureCheckpointExists(ServiceFerroviaire service, Ville ville, int ordre) {
+        boolean exists = serviceCheckpointRepository.findByServiceOrderByOrdreAsc(service).stream()
+                .anyMatch(checkpoint -> checkpoint.getOrdre() == ordre);
+        if (!exists) {
+            ensureCheckpoint(service, ville, ordre);
+        }
+    }
+
+    private void ensureDemoTicket(String codeOptique,
+                                  Client client,
+                                  ServiceFerroviaire service,
+                                  SegmentStatus status,
+                                  int ordreDepartValide,
+                                  int ordreArriveeValide) {
+        Billet billet = billetRepository.findByCodeOptique(codeOptique)
+                .orElseGet(() -> new Billet(codeOptique, BigDecimal.valueOf(service.getPrixBase()), client));
+        billet.setClient(client);
+        billet.setPrixFinal(BigDecimal.valueOf(service.getPrixBase()));
+        billet.setEtat(TicketStatus.DISPONIBLE);
+        billetRepository.save(billet);
+
+        SegmentBillet segment = billet.getSegments().stream()
+                .findFirst()
+                .orElseGet(() -> {
+                    SegmentBillet created = new SegmentBillet(1, service);
+                    created.setBillet(billet);
+                    billet.getSegments().add(created);
+                    return created;
+                });
+        segment.setOrdre(1);
+        segment.setService(service);
+        segment.setEtatSegment(status);
+        segment.setOrdreDepartValide(ordreDepartValide);
+        segment.setOrdreArriveeValide(ordreArriveeValide);
+        segment.setBillet(billet);
         segmentBilletRepository.save(segment);
         billetRepository.save(billet);
     }

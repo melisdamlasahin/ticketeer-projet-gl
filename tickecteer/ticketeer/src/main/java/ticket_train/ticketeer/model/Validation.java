@@ -3,7 +3,7 @@ package ticket_train.ticketeer.model;
 import ticket_train.ticketeer.model.enums.ValidationMotif;
 import ticket_train.ticketeer.model.enums.ValidationResult;
 import jakarta.persistence.*;
-        import java.time.LocalDateTime;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -29,11 +29,20 @@ public class Validation {
     private Controleur controleur;
 
     @ManyToOne
-    @JoinColumn(name = "segment_id", nullable = false)
+    @JoinColumn(name = "segment_id")
     private SegmentBillet segment;
 
     @Column
     private Integer checkpointOrder;
+
+    @Column(length = 64)
+    private String submittedCodeHash;
+
+    @Column
+    private UUID requestedServiceId;
+
+    @Column
+    private UUID requestedCheckpointId;
 
     public Validation() {}
 
@@ -54,6 +63,20 @@ public class Validation {
         this.checkpointOrder = checkpointOrder;
     }
 
+    public Validation(ValidationResult resultat,
+                      ValidationMotif motif,
+                      Controleur controleur,
+                      SegmentBillet segment,
+                      Integer checkpointOrder,
+                      String submittedCodeHash,
+                      UUID requestedServiceId,
+                      UUID requestedCheckpointId) {
+        this(resultat, motif, controleur, segment, checkpointOrder);
+        this.submittedCodeHash = submittedCodeHash;
+        this.requestedServiceId = requestedServiceId;
+        this.requestedCheckpointId = requestedCheckpointId;
+    }
+
     // Getters et Setters
     public UUID getValidationId() { return validationId; }
     public void setValidationId(UUID validationId) { this.validationId = validationId; }
@@ -69,4 +92,10 @@ public class Validation {
     public void setSegment(SegmentBillet segment) { this.segment = segment; }
     public Integer getCheckpointOrder() { return checkpointOrder; }
     public void setCheckpointOrder(Integer checkpointOrder) { this.checkpointOrder = checkpointOrder; }
+    public String getSubmittedCodeHash() { return submittedCodeHash; }
+    public void setSubmittedCodeHash(String submittedCodeHash) { this.submittedCodeHash = submittedCodeHash; }
+    public UUID getRequestedServiceId() { return requestedServiceId; }
+    public void setRequestedServiceId(UUID requestedServiceId) { this.requestedServiceId = requestedServiceId; }
+    public UUID getRequestedCheckpointId() { return requestedCheckpointId; }
+    public void setRequestedCheckpointId(UUID requestedCheckpointId) { this.requestedCheckpointId = requestedCheckpointId; }
 }

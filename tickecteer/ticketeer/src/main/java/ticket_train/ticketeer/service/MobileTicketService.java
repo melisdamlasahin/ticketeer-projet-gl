@@ -80,9 +80,21 @@ public class MobileTicketService {
         billet.setConfirmationEmailEnvoyee(Boolean.TRUE);
         billetRepository.save(billet);
 
-        createSegment(billet, 1, outboundService);
+        createSegment(
+                billet,
+                1,
+                outboundService,
+                request.getDepartureCheckpointId(),
+                request.getArrivalCheckpointId()
+        );
         if (returnService.isPresent()) {
-            createSegment(billet, 2, returnService.get());
+            createSegment(
+                    billet,
+                    2,
+                    returnService.get(),
+                    request.getReturnDepartureCheckpointId(),
+                    request.getReturnArrivalCheckpointId()
+            );
         }
         billetRepository.save(billet);
 
@@ -187,16 +199,58 @@ public class MobileTicketService {
         return toTicketResponse(billet);
     }
 
-    private void createSegment(Billet billet, int ordre, ServiceFerroviaire service) {
+    private void createSegment(Billet billet,
+                               int ordre,
+                               ServiceFerroviaire service,
+                               String departureCheckpointId,
+                               String arrivalCheckpointId) {
         SegmentBillet segment = new SegmentBillet(ordre, service);
-        segment.setOrdreDepartValide(1);
-        int maxCheckpointOrder = service.getCheckpoints() != null && !service.getCheckpoints().isEmpty()
-                ? service.getCheckpoints().stream().map(ServiceCheckpoint::getOrdre).max(Integer::compareTo).orElse(2)
-                : 2;
-        segment.setOrdreArriveeValide(maxCheckpointOrder);
+        int minCheckpointOrder = service.getCheckpoints() != null && !service.getCheckpoints().isEmpty()
+                ? service.getCheckpoints().stream().map(ServiceCheckpoint::getOrdre).min(Integer::compareTo).orElse(1)
+                : 1;
+        int maxCheckpointOrder = maxCheckpointOrder(service);
+        int departureOrder = resolveCheckpointOrder(service, departureCheckpointId, minCheckpointOrder, "Checkpoint depart invalide");
+        int arrivalOrder = resolveCheckpointOrder(service, arrivalCheckpointId, maxCheckpointOrder, "Checkpoint arrivee invalide");
+        if (departureOrder >= arrivalOrder) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Zone de validite du billet incoherente");
+        }
+        segment.setOrdreDepartValide(departureOrder);
+        segment.setOrdreArriveeValide(arrivalOrder);
         segment.setBillet(billet);
         billet.getSegments().add(segment);
         segmentBilletRepository.save(segment);
+    }
+
+    private int maxCheckpointOrder(ServiceFerroviaire service) {
+        return service.getCheckpoints() != null && !service.getCheckpoints().isEmpty()
+                ? service.getCheckpoints().stream().map(ServiceCheckpoint::getOrdre).max(Integer::compareTo).orElse(2)
+                : 2;
+    }
+
+    private int resolveCheckpointOrder(ServiceFerroviaire service,
+                                       String checkpointId,
+                                       int defaultOrder,
+                                       String errorMessage) {
+        if (checkpointId == null || checkpointId.isBlank()) {
+            return defaultOrder;
+        }
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(checkpointId);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        }
+        if (service.getCheckpoints() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        }
+        return service.getCheckpoints().stream()
+                .filter(checkpoint -> parsedId.equals(checkpoint.getCheckpointId()))
+                .filter(checkpoint -> checkpoint.getService() != null
+                        && checkpoint.getService().getServiceId() != null
+                        && checkpoint.getService().getServiceId().equals(service.getServiceId()))
+                .map(ServiceCheckpoint::getOrdre)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage));
     }
 
     private String generateSeatNumber(String preference, String bookingClass) {

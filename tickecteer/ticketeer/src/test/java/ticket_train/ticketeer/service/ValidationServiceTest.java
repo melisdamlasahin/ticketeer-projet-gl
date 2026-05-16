@@ -93,71 +93,90 @@ class ValidationServiceTest {
 
     @Test
     void returnsBilletInconnuForUnknownTicket() {
+        UUID checkpointId = UUID.randomUUID();
         when(signedQrService.parseAndVerify("UNKNOWN"))
                 .thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("UNKNOWN")).thenReturn(Optional.empty());
+        when(billetRepository.findByCodeOptiqueForUpdate("UNKNOWN")).thenReturn(Optional.empty());
 
-        ValidationResponse response = validationService.validerBillet(new ValidationRequest("UNKNOWN", serviceId), controleur);
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("UNKNOWN", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationResult.INVALID, response.getResultat());
         assertEquals(ValidationMotif.BILLET_INCONNU, response.getMotif());
+        verify(validationTraceService).saveAttemptTrace(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void returnsDejaValideForAlreadyValidatedSegment() {
         Billet billet = buildBilletWithSegment(SegmentStatus.VALIDE, serviceId, 1, 2);
+        UUID checkpointId = UUID.randomUUID();
+        when(serviceCheckpointRepository.findById(checkpointId))
+                .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Paris", 1)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
         when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(ValidationMotif.DEJA_VALIDE);
 
-        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId), controleur);
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationMotif.DEJA_VALIDE, response.getMotif());
-        verify(validationTraceService).saveTrace(any(), any(), any(), any(), any());
+        verify(validationTraceService).saveAttemptTrace(any(), any(), any(), any(), any(), any(), any(), any());
         verify(segmentBilletRepository, never()).save(any());
     }
 
     @Test
     void returnsNonConformeServiceForWrongService() {
         Billet billet = buildBilletWithSegment(SegmentStatus.PREVU, UUID.randomUUID(), 1, 2);
+        UUID checkpointId = UUID.randomUUID();
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
 
-        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId), controleur);
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationMotif.NON_CONFORME_SERVICE, response.getMotif());
     }
 
     @Test
     void returnsCodeIllisibleForMalformedQr() {
+        UUID checkpointId = UUID.randomUUID();
         when(signedQrService.parseAndVerify("BADQR"))
                 .thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.MALFORMED, null));
 
-        ValidationResponse response = validationService.validerBillet(new ValidationRequest("BADQR", serviceId), controleur);
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("BADQR", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationMotif.CODE_ILLISIBLE, response.getMotif());
     }
 
     @Test
     void returnsQrSignatureInvalideForTamperedSignedQr() {
+        UUID checkpointId = UUID.randomUUID();
         when(signedQrService.parseAndVerify("TAMPERED"))
                 .thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.INVALID_SIGNATURE, null));
 
-        ValidationResponse response = validationService.validerBillet(new ValidationRequest("TAMPERED", serviceId), controleur);
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("TAMPERED", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationResult.INVALID, response.getResultat());
         assertEquals(ValidationMotif.QR_SIGNATURE_INVALIDE, response.getMotif());
-        verify(billetRepository, never()).findByCodeOptique(any());
+        verify(billetRepository, never()).findByCodeOptiqueForUpdate(any());
     }
 
     @Test
     void returnsValidationImpossibleTemporairementWhenRepositoryFails() {
+        UUID checkpointId = UUID.randomUUID();
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenThrow(new DataAccessResourceFailureException("db down"));
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenThrow(new DataAccessResourceFailureException("db down"));
 
-        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId), controleur);
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT, response.getMotif());
+    }
+
+    @Test
+    void rejectsValidationWithoutCheckpointConfirmation() {
+        ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId), controleur);
+
+        assertEquals(ValidationResult.INVALID, response.getResultat());
+        assertEquals(ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT, response.getMotif());
+        verify(billetRepository, never()).findByCodeOptiqueForUpdate(any());
+        verify(validationTraceService).saveAttemptTrace(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -167,7 +186,7 @@ class ValidationServiceTest {
         when(serviceCheckpointRepository.findById(checkpointId))
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Paris", 1)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
         when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
@@ -176,7 +195,7 @@ class ValidationServiceTest {
         assertEquals(ValidationMotif.OK, response.getMotif());
         assertEquals(SegmentStatus.VALIDE, billet.getSegments().get(0).getEtatSegment());
         assertEquals(TicketStatus.EN_UTILISATION, billet.getEtat());
-        verify(validationTraceService).saveTrace(any(), any(), any(), any(), any());
+        verify(validationTraceService).saveAttemptTrace(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -186,14 +205,13 @@ class ValidationServiceTest {
         when(serviceCheckpointRepository.findById(checkpointId))
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Marseille", 3)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationResult.INVALID, response.getResultat());
         assertEquals(ValidationMotif.HORS_PARCOURS_AUTORISE, response.getMotif());
-        assertEquals(SegmentStatus.INVALIDE, billet.getSegments().get(0).getEtatSegment());
+        assertEquals(SegmentStatus.PREVU, billet.getSegments().get(0).getEtatSegment());
     }
 
     @Test
@@ -203,8 +221,7 @@ class ValidationServiceTest {
         when(serviceCheckpointRepository.findById(checkpointId))
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Lyon", 2)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
@@ -236,14 +253,13 @@ class ValidationServiceTest {
         when(serviceCheckpointRepository.findById(checkpointId))
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Lyon", 2)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 
         assertEquals(ValidationResult.INVALID, response.getResultat());
         assertEquals(ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT, response.getMotif());
-        assertEquals(SegmentStatus.INVALIDE, billet.getSegments().get(0).getEtatSegment());
+        assertEquals(SegmentStatus.PREVU, billet.getSegments().get(0).getEtatSegment());
     }
 
     @Test
@@ -269,8 +285,7 @@ class ValidationServiceTest {
         when(serviceCheckpointRepository.findById(checkpointId))
                 .thenReturn(Optional.of(buildCheckpoint((SegmentBillet) billet.getSegments().get(0), checkpointId, "Lyon", 2)));
         when(signedQrService.parseAndVerify("CODE")).thenReturn(new SignedQrService.ParseResult(SignedQrService.ParseStatus.NOT_SIGNED, null));
-        when(billetRepository.findByCodeOptique("CODE")).thenReturn(Optional.of(billet));
-        when(fraudDetectionService.detectValidationIssue(any(), any(), any())).thenReturn(null);
+        when(billetRepository.findByCodeOptiqueForUpdate("CODE")).thenReturn(Optional.of(billet));
 
         ValidationResponse response = validationService.validerBillet(new ValidationRequest("CODE", serviceId, checkpointId), controleur);
 

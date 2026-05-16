@@ -17,7 +17,7 @@ public class SegmentBillet {
     private Integer ordre;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private SegmentStatus etatSegment = SegmentStatus.PREVU;
 
     @ManyToOne

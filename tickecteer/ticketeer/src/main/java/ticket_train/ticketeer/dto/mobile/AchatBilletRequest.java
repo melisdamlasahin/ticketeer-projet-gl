@@ -7,7 +7,11 @@ import jakarta.validation.constraints.Pattern;
 public class AchatBilletRequest {
     @NotBlank(message = "Le service aller est obligatoire")
     private String serviceId;
+    private String departureCheckpointId;
+    private String arrivalCheckpointId;
     private String returnServiceId;
+    private String returnDepartureCheckpointId;
+    private String returnArrivalCheckpointId;
     private String profilTarifaire;
 
     @NotBlank(message = "Le client est obligatoire")
@@ -34,12 +38,44 @@ public class AchatBilletRequest {
         this.serviceId = serviceId;
     }
 
+    public String getDepartureCheckpointId() {
+        return departureCheckpointId;
+    }
+
+    public void setDepartureCheckpointId(String departureCheckpointId) {
+        this.departureCheckpointId = departureCheckpointId;
+    }
+
+    public String getArrivalCheckpointId() {
+        return arrivalCheckpointId;
+    }
+
+    public void setArrivalCheckpointId(String arrivalCheckpointId) {
+        this.arrivalCheckpointId = arrivalCheckpointId;
+    }
+
     public String getReturnServiceId() {
         return returnServiceId;
     }
 
     public void setReturnServiceId(String returnServiceId) {
         this.returnServiceId = returnServiceId;
+    }
+
+    public String getReturnDepartureCheckpointId() {
+        return returnDepartureCheckpointId;
+    }
+
+    public void setReturnDepartureCheckpointId(String returnDepartureCheckpointId) {
+        this.returnDepartureCheckpointId = returnDepartureCheckpointId;
+    }
+
+    public String getReturnArrivalCheckpointId() {
+        return returnArrivalCheckpointId;
+    }
+
+    public void setReturnArrivalCheckpointId(String returnArrivalCheckpointId) {
+        this.returnArrivalCheckpointId = returnArrivalCheckpointId;
     }
 
     public String getProfilTarifaire() {

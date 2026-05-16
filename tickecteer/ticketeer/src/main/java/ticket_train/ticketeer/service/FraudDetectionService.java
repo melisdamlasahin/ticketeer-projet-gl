@@ -47,7 +47,7 @@ public class FraudDetectionService {
             return ValidationMotif.NON_CONFORME_SERVICE;
         }
         if (segmentBillet.getEtatSegment() == SegmentStatus.TERMINE) {
-            return ValidationMotif.TRAJET_TERMINE;
+            return ValidationMotif.DEJA_VALIDE;
         }
         if (segmentBillet.getEtatSegment() == SegmentStatus.INVALIDE) {
             return ValidationMotif.HORS_PARCOURS_AUTORISE;

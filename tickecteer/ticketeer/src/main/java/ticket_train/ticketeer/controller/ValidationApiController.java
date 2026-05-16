@@ -3,9 +3,12 @@ package ticket_train.ticketeer.controller;
 import ticket_train.ticketeer.dto.ValidationRequest;
 import ticket_train.ticketeer.dto.ValidationResponse;
 import ticket_train.ticketeer.model.Controleur;
+import ticket_train.ticketeer.model.enums.ValidationMotif;
+import ticket_train.ticketeer.model.enums.ValidationResult;
 import ticket_train.ticketeer.service.ControllerValidationRateLimitService;
 import ticket_train.ticketeer.service.ControlUnitAuthService;
 import ticket_train.ticketeer.service.ValidationService;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -40,9 +43,18 @@ public class ValidationApiController {
             return ResponseEntity.status(403).build();
         }
 
-        controllerValidationRateLimitService.checkAllowed(login + "|" + resolveSourceIp(httpRequest));
-        ValidationResponse response = validationService.validerBillet(request, controleur);
-        return ResponseEntity.ok(response);
+        try {
+            controllerValidationRateLimitService.checkAllowed(login + "|" + resolveSourceIp(httpRequest));
+            ValidationResponse response = validationService.validerBillet(request, controleur);
+            return ResponseEntity.ok(response);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            return ResponseEntity.ok(new ValidationResponse(
+                    ValidationResult.INVALID,
+                    ValidationMotif.VALIDATION_IMPOSSIBLE_TEMPORAIREMENT
+            ));
+        }
     }
 
     private String resolveSourceIp(HttpServletRequest request) {

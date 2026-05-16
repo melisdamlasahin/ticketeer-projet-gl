@@ -12,6 +12,7 @@ import ticket_train.ticketeer.dto.mobile.AchatBilletResponse;
 import ticket_train.ticketeer.model.Billet;
 import ticket_train.ticketeer.model.Client;
 import ticket_train.ticketeer.model.SegmentBillet;
+import ticket_train.ticketeer.model.ServiceCheckpoint;
 import ticket_train.ticketeer.model.ServiceFerroviaire;
 import ticket_train.ticketeer.model.Train;
 import ticket_train.ticketeer.model.Ville;
@@ -164,5 +165,60 @@ class AchatBilletServiceTest {
         assertEquals(2, savedBillet.getSegments().size());
         assertEquals(1, savedBillet.getSegments().get(0).getOrdre());
         assertEquals(2, savedBillet.getSegments().get(1).getOrdre());
+    }
+
+    @Test
+    void confirmerAchatStoresPartialCheckpointValidityRange() {
+        Client client = new Client("Jean", "Dupont", "jean@test", "hash", "photo");
+        client.setClientId(clientId);
+
+        ServiceFerroviaire service = new ServiceFerroviaire(
+                LocalDate.of(2026, 3, 18),
+                new Train("T1", "TGV Test"),
+                new Ville("Paris"),
+                new Ville("Marseille"),
+                100.0
+        );
+        service.setServiceId(serviceId);
+        ServiceCheckpoint paris = checkpoint(service, "Paris", 1);
+        ServiceCheckpoint lyon = checkpoint(service, "Lyon", 2);
+        ServiceCheckpoint marseille = checkpoint(service, "Marseille", 3);
+        service.setCheckpoints(List.of(paris, lyon, marseille));
+
+        when(clientTokenService.requireAuthenticatedClientId()).thenReturn(clientId);
+        when(clientRepository.findById(clientId)).thenReturn(Optional.of(client));
+        when(serviceFerroviaireRepository.findById(serviceId)).thenReturn(Optional.of(service));
+        when(billetRepository.existsByCodeOptique(any())).thenReturn(false);
+        doAnswer(invocation -> {
+            Billet billet = invocation.getArgument(0);
+            if (billet.getTicketId() == null) {
+                billet.setTicketId(UUID.randomUUID());
+            }
+            return billet;
+        }).when(billetRepository).save(any(Billet.class));
+
+        AchatBilletRequest request = new AchatBilletRequest();
+        request.setClientId(clientId.toString());
+        request.setServiceId(serviceId.toString());
+        request.setDepartureCheckpointId(paris.getCheckpointId().toString());
+        request.setArrivalCheckpointId(lyon.getCheckpointId().toString());
+        request.setProfilTarifaire("STANDARD");
+
+        mobileApiService.confirmerAchat(request);
+
+        ArgumentCaptor<SegmentBillet> segmentCaptor = ArgumentCaptor.forClass(SegmentBillet.class);
+        verify(segmentBilletRepository).save(segmentCaptor.capture());
+        SegmentBillet savedSegment = segmentCaptor.getValue();
+        assertEquals(1, savedSegment.getOrdreDepartValide());
+        assertEquals(2, savedSegment.getOrdreArriveeValide());
+    }
+
+    private ServiceCheckpoint checkpoint(ServiceFerroviaire service, String cityName, int order) {
+        ServiceCheckpoint checkpoint = new ServiceCheckpoint();
+        checkpoint.setCheckpointId(UUID.randomUUID());
+        checkpoint.setService(service);
+        checkpoint.setVille(new Ville(cityName));
+        checkpoint.setOrdre(order);
+        return checkpoint;
     }
 }

@@ -1,6 +1,20 @@
-.gradle-home/
-.gradle/
+# IDE / local config
+.idea/
+.ai/
+extensions/
+*.iml
+local.properties
+
+# Build outputs
 build/
-*.jar
-Projetgla@/.gradle-home/
-.gradle-home/
+target/
+app/build/
+tickecteer/target/
+tickecteer/ticketeer/target/
+.gradle/
+
+# OS files
+.DS_Store
+
+# Logs
+*.log
