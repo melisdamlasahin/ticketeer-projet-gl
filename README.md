@@ -1,6 +1,7 @@
-# EasyRail
+# Ticketeer
+<img width="1672" height="941" alt="369935e4-4116-41a7-8056-1b102ebae7de" src="https://github.com/user-attachments/assets/f98d284e-d3d8-4331-bf22-048bf21ec2eb" />
 
-EasyRail is a railway ticketing project with three runtime parts:
+Ticketeer is a railway ticketing project with three runtime parts:
 
 - Android passenger app in `app/`
 - Spring Boot backend in `tickecteer/ticketeer/`
@@ -13,6 +14,10 @@ The passenger client is Android. The web UI is only for controller authenticatio
 - `app/`: Android client for registration, login, service browsing, purchase, ticket display, PDF download, and profile management
 - `tickecteer/ticketeer/`: central API, ticket generation, QR signing, validation rules, controller login, and controller validation screens
 - `mysql-data/`: local MySQL data directory used by the backend in local development
+
+<img width="240" height="494" alt="Screenshot 2026-07-03 at 19 19 32" src="https://github.com/user-attachments/assets/55fa4631-1e6f-4fed-82c3-d0e7e52df981" />
+<img width="286" height="312" alt="Screenshot 2026-07-03 at 19 20 59" src="https://github.com/user-attachments/assets/f6611dfb-8182-4cf3-b216-e27cef4077c5" />
+<img width="240" height="494" alt="Screenshot 2026-07-03 at 19 18 33" src="https://github.com/user-attachments/assets/5f95c951-a187-4814-8063-b9b68c701283" />
 
 ## Run The Project
 
